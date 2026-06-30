@@ -1,0 +1,19 @@
+services:
+  pronobot:
+    build: .
+    restart: unless-stopped
+    environment:
+      # Renseignés dans l'onglet "Environment Variables" de Coolify
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - GUILD_ID=${GUILD_ID}
+      - PROVIDER=${PROVIDER}
+      - PANDASCORE_TOKEN=${PANDASCORE_TOKEN}
+      - SPORTSDB_API_KEY=${SPORTSDB_API_KEY}
+      - LEAGUE_ID=${LEAGUE_ID}
+      - SEASON=${SEASON}
+      - DB_PATH=/data/pronobot.db
+    volumes:
+      - pronobot-data:/data      # persiste la base SQLite entre les redeploys
+
+volumes:
+  pronobot-data:
