@@ -6,9 +6,10 @@ import db
 import scheduler
 import sportsdb
 import pandascore
+import espn
 
 ADMIN = app_commands.checks.has_permissions(manage_guild=True)
-_MODS = {"sportsdb": sportsdb, "pandascore": pandascore}
+_MODS = {"sportsdb": sportsdb, "pandascore": pandascore, "espn": espn}
 
 
 @app_commands.command(name="sport_ajouter",
@@ -21,6 +22,7 @@ _MODS = {"sportsdb": sportsdb, "pandascore": pandascore}
 @app_commands.choices(provider=[
     app_commands.Choice(name="Foot / NBA (TheSportsDB)", value="sportsdb"),
     app_commands.Choice(name="Esport (PandaScore)", value="pandascore"),
+    app_commands.Choice(name="Foot gratuit complet (ESPN)", value="espn"),
 ])
 @ADMIN
 async def sport_ajouter(itx: discord.Interaction,
@@ -78,6 +80,7 @@ async def refresh_cmd(itx: discord.Interaction):
     provider=[
         app_commands.Choice(name="Foot / NBA (TheSportsDB)", value="sportsdb"),
         app_commands.Choice(name="Esport (PandaScore)", value="pandascore"),
+        app_commands.Choice(name="Foot gratuit complet (ESPN)", value="espn"),
     ],
     jeu=[
         app_commands.Choice(name="League of Legends", value="lol"),

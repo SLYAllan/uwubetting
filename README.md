@@ -3,7 +3,8 @@
 Pronos entre potes sur **foot, NBA et esport**. Chaque compétition est liée à
 son propre salon (1 salon = 1 sport, pas de mélange), les matchs y popent tout
 seuls, le bot récupère les scores automatiquement et tient un classement par
-salon. Foot/NBA via **TheSportsDB** (gratuit), esport via **PandaScore**.
+salon. Foot/NBA via **TheSportsDB** (gratuit), esport via **PandaScore**, et
+**ESPN** (100% gratuit, sans clé, calendrier complet — ex Coupe du Monde).
 
 ## Arborescence
 ```
@@ -11,6 +12,7 @@ bot.py            # entrée : env, sync commandes, logging, lance le scheduler
 db.py             # SQLite : schéma + helpers de requête
 sportsdb.py       # client TheSportsDB (throttle 1 req/s + retry backoff)
 pandascore.py     # client PandaScore (esport), même interface que sportsdb
+espn.py           # client ESPN (foot, gratuit sans clé), même interface
 scoring.py        # calcul des points (pur, testable: python scoring.py)
 scheduler.py      # jobs APScheduler : refresh (00h00 Paris) + résolution (1h)
 ui.py             # embeds + pagination à boutons
@@ -112,6 +114,20 @@ curl -H "Authorization: Bearer $PANDASCORE_TOKEN" \
 ```
 `pandascore.py` est un drop-in de `sportsdb.py` (mêmes fonctions), donc DB,
 scoring et commandes sont inchangés.
+
+## Foot 100% gratuit (ESPN, sans clé)
+Le tier gratuit de TheSportsDB plafonne le nombre de matchs renvoyés (5 à 15
+selon la clé), ce qui le rend inutilisable pour un calendrier complet type
+Coupe du Monde. `espn.py` interroge l'API publique ESPN (aucune clé requise)
+et renvoie tout le calendrier (passés + à venir). Aucune variable d'env
+supplémentaire : juste `provider:espn` dans `/sport_ajouter`.
+```bash
+/chercher_ligue provider:"Foot gratuit complet (ESPN)" nom:"Coupe du Monde"
+# -> fifa.world
+/sport_ajouter provider:"Foot gratuit complet (ESPN)" league_id:fifa.world nom:"CDM 2026" salon:#cdm-2026
+```
+`league_id` est un slug ESPN (`fifa.world`, `uefa.champions`, `eng.1`…),
+`saison` est ignoré (fenêtre glissante auto : J-3 à J+30).
 
 ## Tests
 ```bash

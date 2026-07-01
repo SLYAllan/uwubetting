@@ -85,8 +85,27 @@ def _normalize(ev):
 
 
 async def events_saison(league_id, season):
-    data = await _get(f"eventsseason.php?id={league_id}&s={season}")
-    return [_normalize(e) for e in (data.get("events") or [])]
+    """Fusionne saison + prochains + récents (dédupliqués par idEvent).
+
+    Le tier gratuit plafonne `eventsseason` (5 avec la clé '3', 15 avec '123')
+    et renvoie les PREMIERS matchs (souvent déjà joués). On ajoute donc
+    `eventsnextleague` (matchs à venir, les seuls pariables) et
+    `eventspastleague` (récents, pour la résolution)."""
+    paths = [f"eventsnextleague.php?id={league_id}",
+             f"eventspastleague.php?id={league_id}"]
+    if season:
+        paths.insert(0, f"eventsseason.php?id={league_id}&s={season}")
+    par_id = {}
+    for p in paths:
+        try:
+            data = await _get(p)
+        except Exception:
+            log.warning("sportsdb endpoint KO: %s", p)
+            continue
+        for e in (data.get("events") or []):
+            if e.get("idEvent"):
+                par_id[e["idEvent"]] = e
+    return [_normalize(e) for e in par_id.values()]
 
 
 async def lookup_event(event_id):

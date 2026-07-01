@@ -37,9 +37,13 @@ async def aide_cmd(itx: discord.Interaction):
         "(https://www.thesportsdb.com/api/v1/json/3/all_leagues.php) "
         "(Ctrl+F le nom → `idLeague`)\n"
         "• Esport : [API PandaScore /leagues]"
-        "(https://developers.pandascore.co/reference/get_leagues)\n\n"
+        "(https://developers.pandascore.co/reference/get_leagues)\n"
+        "• Foot gratuit complet (ESPN, sans clé, calendrier complet type CDM) : "
+        "`/chercher_ligue provider:ESPN nom:<mot-clé>` (ex `Coupe du Monde`, "
+        "`Premier League`)\n\n"
         "IDs courants : 4328 Premier League · 4334 Ligue 1 · 4387 NBA · "
-        "4480 Champions League · 4197 LEC · 293 LCK"), inline=False)
+        "4480 Champions League · 4197 LEC · 293 LCK · `fifa.world` CDM (ESPN)"),
+        inline=False)
     await itx.response.send_message(embed=e, ephemeral=True)
 
 
