@@ -187,7 +187,7 @@ def _channel_de(m):
     return _client.get_channel(int(lg["channel_id"]))
 
 
-async def _annoncer_score(m, sd, se, ancien_sd, ancien_se):
+async def _annoncer_score(m, sd, se, ancien_sd, ancien_se, buts=None):
     ch = _channel_de(m)
     if not ch:
         return
@@ -200,7 +200,13 @@ async def _annoncer_score(m, sd, se, ancien_sd, ancien_se):
     if m["bo"]:
         titre = f"🎮 Map remportée par **{qui}** !" if qui else "🎮 Score mis à jour"
     else:
-        titre = f"⚽ BUUUT de **{qui}** !" if qui else "⚽ Score mis à jour"
+        dernier_but = (buts or [])[-1] if buts else None
+        if dernier_but and dernier_but.get("buteur"):
+            csc = " (CSC)" if dernier_but["csc"] else ""
+            minute = f" — {dernier_but['minute']}" if dernier_but.get("minute") else ""
+            titre = f"⚽ BUUUT de **{dernier_but['buteur']}**{csc}{minute} !"
+        else:
+            titre = f"⚽ BUUUT de **{qui}** !" if qui else "⚽ Score mis à jour"
     e = discord.Embed(title=titre, color=ui.couleur(m["bo"]),
                       description=f"**{m['equipe_dom']}**  {sd} - {se}  **{m['equipe_ext']}**")
     try:
@@ -250,7 +256,7 @@ async def suivre_matchs():
 
         if statut == "termine":
             if ancien_sd is not None and (sd, se) != (ancien_sd, ancien_se):
-                await _annoncer_score(m, sd, se, ancien_sd, ancien_se)
+                await _annoncer_score(m, sd, se, ancien_sd, ancien_se, ev.get("buts"))
             sd90, se90 = _score_90(ev)
             with db.conn() as c:
                 total, bons, nb = _finaliser(c, m, sd, se, sd90, se90)

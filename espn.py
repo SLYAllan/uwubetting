@@ -97,7 +97,25 @@ def _score_90(competitor, league_path):
         return None
 
 
-def _normalize(event, league_path, comp_nom, comp_logo):
+def _buts(key_events):
+    """Liste des buts marqués (hors tirs au but), ordre chronologique :
+    équipe, buteur (None si non renseigné), minute affichée, CSC ou non."""
+    buts = []
+    for e in key_events or []:
+        if not e.get("scoringPlay") or e.get("shootout"):
+            continue
+        participants = e.get("participants") or []
+        buteur = (participants[0].get("athlete") or {}).get("displayName") if participants else None
+        buts.append({
+            "equipe": (e.get("team") or {}).get("displayName"),
+            "buteur": buteur,
+            "minute": (e.get("clock") or {}).get("displayValue") or "",
+            "csc": "own goal" in ((e.get("type") or {}).get("text") or "").lower(),
+        })
+    return buts
+
+
+def _normalize(event, league_path, comp_nom, comp_logo, key_events=None):
     comp = (event.get("competitions") or [{}])[0]
     cs = comp.get("competitors") or []
     home = next((c for c in cs if c.get("homeAway") == "home"), {})
@@ -111,6 +129,7 @@ def _normalize(event, league_path, comp_nom, comp_logo):
         "intAwayScore": _int(away.get("score")),
         "intHomeScore90": _score_90(home, league_path),
         "intAwayScore90": _score_90(away, league_path),
+        "buts": _buts(key_events) if key_events is not None else None,
         "strTimestamp": event.get("date"),
         "dateEvent": (event.get("date") or "")[:10],
         "strStatus": status.get("name"),
@@ -145,7 +164,7 @@ async def lookup_event(event_id):
     comp = (hdr.get("competitions") or [{}])[0]
     event = {"id": eid, "date": comp.get("date"), "competitions": [comp]}
     nom = (hdr.get("league") or {}).get("name") or _LEAGUES.get(league_path, league_path)
-    return _normalize(event, league_path, nom, None)
+    return _normalize(event, league_path, nom, None, key_events=data.get("keyEvents"))
 
 
 def mapper_statut(api_status, a_un_score, kickoff_passe):
