@@ -24,11 +24,10 @@ async def _poster_matchs(itx, journee, *, followup):
     if not rows:
         return await send("Aucun match à venir ici pour l'instant.")
     titre = f"🎯 {rows[0]['comp_nom'] or 'Matchs'} — à pronostiquer"
-    embeds = ui.matchs_pages(rows, titre)
-    view = ui.MatchsView(embeds) if len(embeds) > 1 else None
+    pages = ui.paginer(rows)
+    embeds = [ui.matchs_embed(p, titre, i + 1, len(pages)) for i, p in enumerate(pages)]
+    view = ui.MatchsView(pages, embeds)
     await send(embed=embeds[0], view=view)
-    if view:
-        view.message = await itx.original_response()
 
 
 @app_commands.command(name="matchs", description="Matchs à venir dans ce salon")

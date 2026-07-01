@@ -1,23 +1,11 @@
-"""/prono — enregistre ou modifie un pronostic (refusé après le coup d'envoi)."""
-import re
-
+"""/prono — enregistre, modifie ou supprime un pronostic (refusé après le
+coup d'envoi)."""
 import discord
 from discord import app_commands
 
 import db
-import scoring
+import pronos
 import ui
-
-_SCORE_RE = re.compile(r"\s*(\d+)\s*-\s*(\d+)\s*")
-
-
-def _match_ouvert(m):
-    """Message d'erreur si le match n'existe pas ou a déjà commencé, sinon None."""
-    if not m:
-        return "Match introuvable (vérifie le # dans /matchs)."
-    if (db.parse_dt(m["date_kickoff_utc"]) or db.now_utc()) <= db.now_utc():
-        return "Trop tard, ce match a déjà commencé."
-    return None
 
 
 @app_commands.command(name="prono", description="Enregistre ou modifie ton prono")
@@ -26,25 +14,14 @@ def _match_ouvert(m):
                              "'2-0' (Bo3) ou '3-1' (Bo5, pas de nul en esport)")
 async def prono_cmd(itx: discord.Interaction, match: int, score: str):
     m = db.match_by_numero(match)
-    err = _match_ouvert(m)
+    err = pronos.match_ouvert(m)
     if err:
-        return await itx.response.send_message(err, ephemeral=True)
+        return await itx.response.send_message(err.capitalize() + ".", ephemeral=True)
 
-    mm = _SCORE_RE.fullmatch(score)
-    if not mm:
-        return await itx.response.send_message(
-            "Format de score invalide. Exemple attendu : `2-1`.", ephemeral=True)
-    sd, se = int(mm.group(1)), int(mm.group(2))
-    if not scoring.score_valide_pour_bo(m["bo"], sd, se):
-        return await itx.response.send_message(
-            f"Score `{sd}-{se}` impossible pour un match {m['bo']} "
-            "(pas de nul, le vainqueur doit atteindre le seuil de victoire)."
-            if m["bo"] else f"Score `{sd}-{se}` invalide.", ephemeral=True)
-    resultat = scoring.resultat_depuis_score(sd, se)
-
-    db.upsert_prono(str(itx.user.id), itx.user.display_name, m["id"],
-                    resultat, sd, se)
-    detail = f"{sd}-{se}"
+    ok, err, detail = pronos.enregistrer(
+        str(itx.user.id), itx.user.display_name, m, score)
+    if not ok:
+        return await itx.response.send_message(err.capitalize() + ".", ephemeral=True)
 
     loc = ui.en_paris(m["date_kickoff_utc"])
     e = discord.Embed(
@@ -56,7 +33,7 @@ async def prono_cmd(itx: discord.Interaction, match: int, score: str):
     if m["dom_logo"]:
         e.set_thumbnail(url=m["dom_logo"])
     e.add_field(
-        name="Coup d'envoi",
+        name="Début du match" if m["bo"] else "Coup d'envoi",
         value=f"🕐 {ui.jour_label(loc)} {ui.heure_label(loc)} (Paris) · "
               f"⏱️ {ui.countdown(m['date_kickoff_utc'])}")
     e.set_footer(text="Modifiable jusqu'au coup d'envoi · score exact = 8 pts")
@@ -67,9 +44,9 @@ async def prono_cmd(itx: discord.Interaction, match: int, score: str):
 @app_commands.describe(match="Numéro affiché par /matchs")
 async def prono_supprimer_cmd(itx: discord.Interaction, match: int):
     m = db.match_by_numero(match)
-    err = _match_ouvert(m)
+    err = pronos.match_ouvert(m)
     if err:
-        return await itx.response.send_message(err, ephemeral=True)
+        return await itx.response.send_message(err.capitalize() + ".", ephemeral=True)
 
     if not db.supprimer_prono(str(itx.user.id), m["id"]):
         return await itx.response.send_message(

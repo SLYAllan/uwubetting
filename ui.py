@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 import discord
 
 import db
+import pronos
 
 PARIS = ZoneInfo("Europe/Paris")
 JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -31,21 +32,14 @@ def heure_label(loc):
 
 
 def countdown(iso):
-    """'dans 2j 3h' / 'dans 4h05' / 'dans 12min' / '🔴 en cours'."""
+    """Timestamp Discord natif : live, localisé dans la langue du client de
+    chacun ("in 3 hours" / "dans 3 heures"...). '🔴 en cours' si déjà passé."""
     d = db.parse_dt(iso)
     if not d:
         return ""
-    secs = int((d - db.now_utc()).total_seconds())
-    if secs <= 0:
+    if d <= db.now_utc():
         return "🔴 en cours"
-    jours, reste = divmod(secs, 86400)
-    heures, reste = divmod(reste, 3600)
-    minutes = reste // 60
-    if jours:
-        return f"dans {jours}j {heures}h"
-    if heures:
-        return f"dans {heures}h{minutes:02d}"
-    return f"dans {minutes}min"
+    return f"<t:{int(d.timestamp())}:R>"
 
 
 def barre(pct):
@@ -106,19 +100,73 @@ def matchs_embed(rows, titre, page=1, total=1):
 
 
 def matchs_pages(rows, titre):
-    """Liste d'embeds, un par page de matchs."""
+    """Liste d'embeds, un par page de matchs (sans boutons, pour les annonces auto)."""
     pages = paginer(rows)
     return [matchs_embed(p, titre, i + 1, len(pages)) for i, p in enumerate(pages)]
 
 
-class MatchsView(discord.ui.View):
-    """Boutons de pagination pour parcourir les autres matchs."""
+class ProsRapidesModal(discord.ui.Modal, title="Pronos rapides"):
+    """Un prono par ligne (numero:score), pour parier sur toute une page
+    d'un coup au lieu d'enchaîner les /prono un par un."""
 
-    def __init__(self, embeds, timeout=300):
-        super().__init__(timeout=timeout)
+    def __init__(self, rows):
+        super().__init__()
+        self.rows = {r["numero"]: r for r in rows}
+        exemple = "\n".join(f"{r['numero']}:2-1" for r in rows[:4])
+        self.saisie = discord.ui.TextInput(
+            label="Format : numero:score (1 par ligne)",
+            style=discord.TextStyle.paragraph,
+            placeholder=exemple or "1:2-1")
+        self.add_item(self.saisie)
+
+    async def on_submit(self, itx: discord.Interaction):
+        oks, erreurs = [], []
+        for ligne in (l.strip() for l in self.saisie.value.splitlines()):
+            if not ligne:
+                continue
+            num_str, sep, score = ligne.partition(":")
+            if not sep:
+                erreurs.append(f"`{ligne}` : format attendu `numero:score`")
+                continue
+            try:
+                num = int(num_str.strip())
+            except ValueError:
+                erreurs.append(f"`{ligne}` : numéro invalide")
+                continue
+            m = self.rows.get(num)
+            if not m:
+                erreurs.append(f"#{num} : pas sur cette page")
+                continue
+            err = pronos.match_ouvert(m)
+            if err:
+                erreurs.append(f"#{num} : {err}")
+                continue
+            ok, err, detail = pronos.enregistrer(
+                str(itx.user.id), itx.user.display_name, m, score.strip())
+            if ok:
+                oks.append(f"#{num} · {m['equipe_dom']} 🆚 {m['equipe_ext']} → **{detail}**")
+            else:
+                erreurs.append(f"#{num} : {err}")
+
+        desc = ""
+        if oks:
+            desc += "✅ **Enregistrés**\n" + "\n".join(oks)
+        if erreurs:
+            desc += ("\n\n" if desc else "") + "⚠️ **Erreurs**\n" + "\n".join(erreurs)
+        e = discord.Embed(title="🎯 Pronos rapides", color=BLEU,
+                          description=desc or "Rien à traiter.")
+        await itx.response.send_message(embed=e)
+
+
+class MatchsView(discord.ui.View):
+    """Boutons de pagination (actifs en permanence, pas de timeout) + prono
+    rapide sur la page actuellement affichée."""
+
+    def __init__(self, pages, embeds):
+        super().__init__(timeout=None)
+        self.pages = pages
         self.embeds = embeds
         self.i = 0
-        self.message = None
         self._sync()
 
     def _sync(self):
@@ -137,11 +185,10 @@ class MatchsView(discord.ui.View):
         self._sync()
         await itx.response.edit_message(embed=self.embeds[self.i], view=self)
 
-    async def on_timeout(self):
-        for b in self.children:
-            b.disabled = True
-        if self.message:
-            try:
-                await self.message.edit(view=self)
-            except discord.HTTPError:
-                pass
+    @discord.ui.button(label="🎯 Prono rapide", style=discord.ButtonStyle.success)
+    async def prono_rapide(self, itx: discord.Interaction, _btn):
+        rows = self.pages[self.i]
+        if not rows:
+            return await itx.response.send_message(
+                "Aucun match sur cette page.", ephemeral=True)
+        await itx.response.send_modal(ProsRapidesModal(rows))

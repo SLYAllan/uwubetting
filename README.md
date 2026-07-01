@@ -13,8 +13,9 @@ db.py             # SQLite : schéma + helpers de requête
 pandascore.py     # client PandaScore (esport), même interface que espn
 espn.py           # client ESPN (foot + NBA, gratuit sans clé), même interface
 scoring.py        # calcul des points (pur, testable: python scoring.py)
-scheduler.py      # jobs APScheduler : refresh (00h00 Paris) + résolution (1h)
-ui.py             # embeds + pagination à boutons
+pronos.py         # validation + enregistrement d'un prono (partagé /prono + bouton rapide)
+scheduler.py      # jobs APScheduler : refresh (00h00) + résolution (1h) + suivi live (90s)
+ui.py             # embeds + pagination à boutons + modal "prono rapide"
 commands/         # slash commands
   matchs · prono · mes_pronos · classement · sports · aide
 requirements.txt · .env.example · Dockerfile · docker-compose.yml · pronobot.service
@@ -22,7 +23,7 @@ requirements.txt · .env.example · Dockerfile · docker-compose.yml · pronobot
 
 ## Commandes
 **Joueurs**
-- `/matchs [journee]` — matchs à venir **de ce salon** (boutons ◀️▶️ pour paginer)
+- `/matchs [journee]` — matchs à venir **de ce salon** (boutons ◀️▶️ permanents pour paginer + 🎯 Prono rapide : parier sur toute la page affichée d'un coup via une fenêtre de saisie)
 - `/prono match:<#> score:<2-1>` — score exact obligatoire (nul possible au foot, pas en esport BO1/3/5) ; public, modifiable jusqu'au coup d'envoi
 - `/prono_supprimer match:<#>` — supprime ton prono (impossible après le coup d'envoi)
 - `/mes_pronos` — tes pronos en cours
@@ -53,6 +54,17 @@ automatiquement à chaque refresh (00h00 Paris) ou via `/refresh`.
 Un mauvais prono casse la série ; la meilleure série ne redescend jamais. Le
 % réussite = `bons / pronos_sur_matchs_terminés` (ignore les matchs non résolus
 et les reportés/annulés).
+
+## Suivi live 📡
+Toutes les 90s, `scheduler.suivre_matchs` traque les matchs en cours et
+annonce dans le salon chaque but (foot) ou changement de score = map gagnée
+(esport). Le calcul des points reste géré par la résolution horaire — le
+suivi live ne fait qu'annoncer et tenir le score à jour entre-temps. Pas de
+suivi pour la NBA (`basketball/nba`) : trop de points marqués pour qu'une
+annonce par panier ait un sens.
+
+Le coup d'envoi affiché (`/matchs`, `/prono`) utilise le timestamp Discord
+natif (`<t:...:R>`) : countdown live, dans la langue du client de chacun.
 
 ## Écarts au schéma initial (assumés)
 - `matchs.journee` ajouté — requis par `/matchs [journee]` (mappé sur `intRound`).
@@ -133,4 +145,5 @@ ignoré (fenêtre glissante auto : J-3 à J+30).
 ## Tests
 ```bash
 python scoring.py   # doit afficher "scoring ok"
+python db.py         # doit afficher "db ok" (fusion des matchs dupliqués)
 ```

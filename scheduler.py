@@ -7,6 +7,7 @@ nouveaux matchs sont annoncés automatiquement dans le salon de leur ligue.
 import os
 import logging
 
+import discord
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import db
@@ -145,11 +146,74 @@ async def resoudre_matchs():
                 db.set_statut(c, m["id"], statut)
 
 
+def _sport_bruyant(m):
+    """Le basket marque trop souvent pour qu'une annonce par panier ait un
+    sens (contrairement à un but au foot ou une map gagnée en esport)."""
+    return not (m["league"] or "").startswith("basketball/")
+
+
+async def _annoncer_score(m, sd, se, ancien_sd, ancien_se):
+    if not _client:
+        return
+    lg = db.league_by_id(m["league"])
+    if not (lg and lg["channel_id"]):
+        return
+    ch = _client.get_channel(int(lg["channel_id"]))
+    if not ch:
+        return
+    qui = None
+    if ancien_sd is not None:
+        if sd > ancien_sd:
+            qui = m["equipe_dom"]
+        elif se > ancien_se:
+            qui = m["equipe_ext"]
+    if m["bo"]:
+        titre = f"🎮 Map remportée par **{qui}** !" if qui else "🎮 Score mis à jour"
+    else:
+        titre = f"⚽ BUUUT de **{qui}** !" if qui else "⚽ Score mis à jour"
+    e = discord.Embed(title=titre, color=ui.couleur(m["bo"]),
+                      description=f"**{m['equipe_dom']}**  {sd} - {se}  **{m['equipe_ext']}**")
+    try:
+        await ch.send(embed=e)
+    except Exception:
+        log.exception("annonce score impossible dans %s", lg["channel_id"])
+
+
+async def suivre_matchs():
+    """Toutes les ~90s : traque les matchs en cours et annonce les buts (foot)
+    ou changements de score (esport, = maps gagnées). Ne touche pas aux matchs
+    déjà 'termine' (la résolution/le calcul des points reste géré par
+    resoudre_matchs, une heure au plus tard)."""
+    candidats = [m for m in db.matchs_a_resoudre()
+                if _sport_bruyant(m)
+                and (db.parse_dt(m["date_kickoff_utc"]) or db.now_utc()) <= db.now_utc()]
+    for m in candidats:
+        prov = _prov(m["provider"])
+        try:
+            ev = await prov.lookup_event(m["sportsdb_event_id"])
+        except Exception:
+            log.exception("suivi %s", m["sportsdb_event_id"])
+            continue
+        if not ev:
+            continue
+        sd, se = _score(ev)
+        if sd is None or se is None:
+            continue
+        ancien_sd, ancien_se = m["score_dom"], m["score_ext"]
+        statut = prov.mapper_statut(ev.get("strStatus"), True, True)
+        if statut != "termine":
+            with db.conn() as c:
+                db.maj_score_live(c, m["id"], statut, sd, se)
+        if ancien_sd is not None and (sd, se) != (ancien_sd, ancien_se):
+            await _annoncer_score(m, sd, se, ancien_sd, ancien_se)
+
+
 def start(client):
     global _client
     _client = client
     _sched.add_job(refresh_matchs, "cron", hour=0, minute=0,
                    timezone="Europe/Paris", id="refresh")
     _sched.add_job(resoudre_matchs, "interval", hours=1, id="resoudre")
+    _sched.add_job(suivre_matchs, "interval", seconds=90, id="suivre")
     _sched.start()
-    log.info("scheduler démarré (refresh 00h00 Paris, résolution 1h)")
+    log.info("scheduler démarré (refresh 00h00 Paris, résolution 1h, suivi live 90s)")

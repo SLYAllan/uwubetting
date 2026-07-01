@@ -244,6 +244,12 @@ def leagues_for_channel(channel_id):
             (str(channel_id),)).fetchall()]
 
 
+def league_by_id(league_id):
+    with conn() as c:
+        return c.execute("SELECT * FROM leagues WHERE league_id=?",
+                         (league_id,)).fetchone()
+
+
 def match_by_numero(numero):
     with conn() as c:
         return c.execute(
@@ -268,6 +274,13 @@ def set_statut(c, match_id, statut):
 def finalise_match(c, match_id, statut, sd, se):
     c.execute("UPDATE matchs SET statut=?, score_dom=?, score_ext=?, resolu=1 "
               "WHERE id=?", (statut, sd, se, match_id))
+
+
+def maj_score_live(c, match_id, statut, sd, se):
+    """Met à jour le score/statut d'un match EN COURS (pas encore résolu) —
+    utilisé par le suivi live entre deux résolutions horaires."""
+    c.execute("UPDATE matchs SET statut=?, score_dom=?, score_ext=? WHERE id=?",
+             (statut, sd, se, match_id))
 
 
 # ---------- pronos ----------

@@ -12,7 +12,8 @@ async def aide_cmd(itx: discord.Interaction):
         description="Pronostique les matchs, gagne des points, grimpe au classement !"
                     "\nChaque salon a son sport : tu ne vois que ses matchs.")
     e.add_field(name="🎮 Joueurs", value=(
-        "`/matchs [journee]` — les matchs à parier **dans ce salon**\n"
+        "`/matchs [journee]` — les matchs à parier **dans ce salon** (boutons "
+        "◀️▶️ permanents + 🎯 Prono rapide pour parier sur toute la page d'un coup)\n"
         "`/prono match:<#> score:<2-1>` — ton prono, score exact obligatoire "
         "(nul possible au foot, pas en esport Bo1/3/5) — public, "
         "modifiable jusqu'au coup d'envoi\n"
@@ -24,6 +25,11 @@ async def aide_cmd(itx: discord.Interaction):
     e.add_field(name="🏆 Points", value=(
         "Bon résultat **3 pts** · score exact **8 pts** · "
         "série de 3 bons pronos ou + 🔥 **+1 pt** par bon prono"), inline=False)
+    e.add_field(name="📡 Suivi live", value=(
+        "Une fois le match lancé, le bot annonce chaque but (foot) ou map "
+        "gagnée (esport) dans le salon. Coup d'envoi affiché en direct "
+        "(countdown Discord natif). Pas de suivi live pour la NBA (trop de "
+        "points marqués)."), inline=False)
     e.add_field(name="🛠️ Admins", value=(
         "`/sport_ajouter provider:<> league_id:<> nom:<> salon:<#>` — "
         "lier une compétition à un salon (ex CDM 2026, LEC…)\n"
