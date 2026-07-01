@@ -1,17 +1,22 @@
 """Calcul des points — logique pure, testable en standalone (`python scoring.py`).
 
-Barème :
-- Bon résultat (1/N/2)      : 3 pts
-- Score exact (en plus)     : +5 pts  -> 8 pts au total
-- En feu (3 bons d'affilée+): +1 pt bonus par bon prono tant que la série tient
+Barème (les deux premiers sont indépendants -- un match décidé en prolongation
+peut valider l'un sans l'autre, ex: score exact à 90' mais résultat qui bascule
+en prolongation) :
+- Bon résultat (1/N/2, jugé après prolongation éventuelle) : 3 pts
+- Score exact (jugé à 90 minutes)                          : 3 pts
+- Les deux à la fois (bonus)                               : +2 pts -> 8 pts au total
+- En feu (3 bons résultats d'affilée+)                     : +1 pt bonus par bon prono tant que la série tient
 
-Un mauvais prono casse la série (serie_actuelle -> 0). meilleure_serie ne baisse jamais.
+Un résultat faux casse la série (serie_actuelle -> 0), même si le score était
+bon. meilleure_serie ne baisse jamais.
 """
 import re
 
 POINTS_BON = 3
-BONUS_EXACT = 5
-SEUIL_FEU = 3      # à partir du 3e bon prono consécutif
+POINTS_SCORE = 3
+BONUS_COMBO = 2
+SEUIL_FEU = 3      # à partir du 3e bon résultat consécutif
 BONUS_FEU = 1
 
 _BO_RE = re.compile(r"Bo(\d+)", re.IGNORECASE)
@@ -50,24 +55,29 @@ def calcul_points(resultat_pred, sd_pred, se_pred, sd_reel, se_reel, serie_avant
     """Retourne (points, bon, nouvelle_serie) pour un match TERMINÉ.
 
     Le résultat (1/N/2) se juge sur sd_reel/se_reel (score après prolongation
-    éventuelle, hors tirs au but). Le bonus score exact se juge sur sd90/se90
-    (score à 90 minutes) quand fournis -- sinon on retombe sur sd_reel/se_reel
-    (esport, NBA : pas de notion de prolongation).
+    éventuelle, hors tirs au but). Le score exact se juge sur sd90/se90 (score
+    à 90 minutes) quand fournis -- sinon sur sd_reel/se_reel (esport, NBA :
+    pas de notion de prolongation). Les deux sont indépendants : sur un match
+    décidé en prolongation, un score pile bon à 90' rapporte ses 3 pts même
+    si le résultat qu'il impliquait a basculé ensuite.
     serie_avant = streaks.serie_actuelle du joueur avant ce match (chronologique).
     """
-    bon = resultat_pred == resultat_depuis_score(sd_reel, se_reel)
-    if not bon:
-        return 0, False, 0  # série cassée
-    nouvelle_serie = serie_avant + 1
-    pts = POINTS_BON
+    resultat_ok = resultat_pred == resultat_depuis_score(sd_reel, se_reel)
     sd_exact = sd_reel if sd90 is None else sd90
     se_exact = se_reel if se90 is None else se90
-    if sd_pred is not None and se_pred is not None \
-            and sd_pred == sd_exact and se_pred == se_exact:
-        pts += BONUS_EXACT
-    if nouvelle_serie >= SEUIL_FEU:
+    score_ok = sd_pred is not None and se_pred is not None \
+        and sd_pred == sd_exact and se_pred == se_exact
+    nouvelle_serie = serie_avant + 1 if resultat_ok else 0
+    pts = 0
+    if resultat_ok:
+        pts += POINTS_BON
+    if score_ok:
+        pts += POINTS_SCORE
+    if resultat_ok and score_ok:
+        pts += BONUS_COMBO
+    if resultat_ok and nouvelle_serie >= SEUIL_FEU:
         pts += BONUS_FEU
-    return pts, True, nouvelle_serie
+    return pts, resultat_ok, nouvelle_serie
 
 
 def points_si_termine(statut, resultat_pred, sd_pred, se_pred, sd_reel, se_reel, serie_avant,
@@ -116,10 +126,14 @@ def demo():
     # match reporté => 0 pt, série inchangée
     assert points_si_termine("reporte", "1", None, None, 2, 1, 4) == (0, False, 4)
 
-    # prolongation : nul à 90' (2-2), dom gagne après prolongation (3-2)
-    # -> résultat jugé sur 3-2 (victoire dom), score exact jugé sur 2-2
+    # prolongation : nul à 90' (2-2), dom gagne après prolongation (3-2).
+    # Pari "2-2" (nul) : résultat faux (c'est une victoire après prolongation)
+    # mais score pile bon à 90' -> 3 pts quand même, pas de bonus combo, série cassée
+    assert calcul_points("N", 2, 2, 3, 2, 0, sd90=2, se90=2) == (3, False, 0)
+    # pari "3-2" (victoire dom) : résultat bon mais score raté (90' = 2-2, pas 3-2) -> 3 pts
+    assert calcul_points("1", 3, 2, 3, 2, 0, sd90=2, se90=2) == (3, True, 1)
+    # pari "2-2" en résultat ET score correctement anticipés à 90' -> combo 8 pts
     assert calcul_points("1", 2, 2, 3, 2, 0, sd90=2, se90=2) == (8, True, 1)
-    assert calcul_points("N", 2, 2, 3, 2, 0, sd90=2, se90=2) == (0, False, 0)
 
     # cohérence score / format de match
     assert score_valide_pour_bo(None, 1, 1) is True        # nul autorisé au foot
