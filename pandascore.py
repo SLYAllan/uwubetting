@@ -111,9 +111,16 @@ async def lookup_event(event_id):
     return _normalize(m) if m else None
 
 
+_ALIAS = {
+    "msi": "Mid-Season Invitational",
+    "worlds": "World Championship",
+}
+
+
 async def search_leagues(query, jeu=None):
     """Cherche des ligues par nom. `jeu` (slug: lol, csgo, dota2, valorant...)
     rend la recherche fiable ; sans jeu, recherche générique (plus floue)."""
+    query = _ALIAS.get(query.strip().lower(), query)
     path = f"{jeu}/leagues" if jeu else "leagues"
     rows = await _get(path, {"search[name]": query, "per_page": 15})
     return [{"id": str(l["id"]), "nom": l.get("name"),
