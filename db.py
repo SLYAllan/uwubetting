@@ -9,6 +9,7 @@ passer à aiosqlite si le serveur grossit beaucoup.
 - pronos.username : afficher les noms dans `/classement` sans l'intent privilégié
 """
 import os
+import re
 import sqlite3
 import logging
 from contextlib import contextmanager
@@ -107,11 +108,50 @@ def now_utc():
 
 
 # ---------- matchs ----------
+def _tokens(nom):
+    return frozenset(re.findall(r"\w+", (nom or "").lower()))
+
+
+def _fusionner_doublons(c, event_id, league, provider, dom, ext, kickoff):
+    """Certaines API (ex ESPN en phase de groupes) réattribuent un nouvel
+    event_id à une affiche déjà connue une fois le bracket confirmé, ce qui
+    fait apparaître le même match deux fois. Si une affiche identique (mêmes
+    équipes, même coup d'envoi) existe déjà sous un ou plusieurs autres ids,
+    on fusionne : les pronos déjà pris sont déplacés sur la ligne qui va
+    recevoir l'event_id actuel, les doublons sont supprimés."""
+    dom_n, ext_n = _tokens(dom), _tokens(ext)
+    autres = [r for r in c.execute(
+        "SELECT id, equipe_dom, equipe_ext FROM matchs WHERE league=? "
+        "AND provider=? AND statut='a_venir' AND date_kickoff_utc=? "
+        "AND sportsdb_event_id != ?",
+        (league, provider, kickoff, event_id)).fetchall()
+        if _tokens(r["equipe_dom"]) == dom_n and _tokens(r["equipe_ext"]) == ext_n]
+    if not autres:
+        return
+    cible = c.execute("SELECT id FROM matchs WHERE sportsdb_event_id=?",
+                      (event_id,)).fetchone()
+    if cible is None:
+        # id pas encore en base : on rebranche le 1er doublon dessus, le reste
+        # (rarissime : 3 ids pour la même affiche) fusionne dans celui-là
+        c.execute("UPDATE matchs SET sportsdb_event_id=? WHERE id=?",
+                  (event_id, autres[0]["id"]))
+        cible_id, autres = autres[0]["id"], autres[1:]
+    else:
+        cible_id = cible["id"]
+    for r in autres:
+        # un joueur qui aurait parié sur les deux doublons : le prono le plus
+        # récent l'emporte (UNIQUE(user_id, match_id) sur la ligne cible)
+        c.execute("UPDATE OR REPLACE pronos SET match_id=? WHERE match_id=?",
+                  (cible_id, r["id"]))
+        c.execute("DELETE FROM matchs WHERE id=?", (r["id"],))
+
+
 def upsert_match(c, *, event_id, league, provider, dom, ext, kickoff, statut,
                  saison, journee, comp_nom=None, comp_logo=None,
                  dom_logo=None, ext_logo=None, bo=None):
     """Insère/maj un match. Ne touche jamais aux scores/résolution (gérés par
     la résolution), et fige le statut une fois le match résolu."""
+    _fusionner_doublons(c, event_id, league, provider, dom, ext, kickoff)
     c.execute("""
         INSERT INTO matchs(sportsdb_event_id, league, provider, equipe_dom, equipe_ext,
                            date_kickoff_utc, statut, saison, journee,
@@ -326,3 +366,72 @@ def classement(scope="saison", league_ids=None):
         a["pct"] = (a["bons"] / a["resolus"] * 100) if a["resolus"] else 0.0
     table.sort(key=lambda a: (-a["pts"], -a["pct"]))
     return table
+
+
+def demo():
+    """Auto-test de _fusionner_doublons : rejeu du bug ESPN (event_id
+    réattribué / ordre des mots dans le nom d'équipe qui change)."""
+    import tempfile
+    global DB
+    ancien_db, DB = DB, tempfile.mktemp(suffix=".db")
+    fichier_temp = DB
+    try:
+        init()
+        K = "2026-07-01T16:00:00+00:00"
+
+        # cas 1 : le nouvel event_id n'est pas encore en base -> rebranchement
+        with conn() as c:
+            upsert_match(c, event_id="old1", league="L", provider="espn",
+                        dom="England", ext="DR Congo", kickoff=K,
+                        statut="a_venir", saison="", journee=None)
+            renumber(c)
+        with conn() as c:
+            row = c.execute("SELECT id, numero FROM matchs").fetchone()
+            mid, numero = row["id"], row["numero"]
+            upsert_prono("u1", "User1", mid, "1", None, None)
+            upsert_match(c, event_id="new1", league="L", provider="espn",
+                        dom="England", ext="Congo DR", kickoff=K,
+                        statut="a_venir", saison="", journee=32)
+        with conn() as c:
+            rows = c.execute("SELECT * FROM matchs").fetchall()
+            assert len(rows) == 1, "doublon non fusionné (cas rebranchement)"
+            assert rows[0]["numero"] == numero, "numéro perdu pendant la fusion"
+            assert rows[0]["journee"] == 32, "nouvelles infos pas appliquées"
+            assert len(c.execute("SELECT * FROM pronos").fetchall()) == 1
+
+        # cas 2 : les deux doublons existent déjà (bug déjà arrivé) -> fusion
+        with conn() as c:
+            c.execute("INSERT INTO matchs(sportsdb_event_id, league, provider, "
+                     "equipe_dom, equipe_ext, date_kickoff_utc, statut) "
+                     "VALUES('dupA','L2','espn','England','DR Congo',?,'a_venir')", (K,))
+            c.execute("INSERT INTO matchs(sportsdb_event_id, league, provider, "
+                     "equipe_dom, equipe_ext, date_kickoff_utc, statut) "
+                     "VALUES('dupB','L2','espn','England','Congo DR',?,'a_venir')", (K,))
+        with conn() as c:
+            id_a = c.execute("SELECT id FROM matchs WHERE sportsdb_event_id='dupA'").fetchone()["id"]
+            id_b = c.execute("SELECT id FROM matchs WHERE sportsdb_event_id='dupB'").fetchone()["id"]
+            upsert_prono("u2", "User2", id_a, "1", None, None)
+            upsert_prono("u3", "User3", id_b, "1", None, None)
+            upsert_match(c, event_id="dupB", league="L2", provider="espn",
+                        dom="England", ext="Congo DR", kickoff=K,
+                        statut="a_venir", saison="", journee=99)
+        with conn() as c:
+            rows = c.execute("SELECT * FROM matchs WHERE league='L2'").fetchall()
+            assert len(rows) == 1, "doublons déjà existants pas fusionnés"
+            assert rows[0]["journee"] == 99
+            survivants = c.execute("SELECT match_id FROM pronos WHERE "
+                                   "user_id IN ('u2','u3')").fetchall()
+            assert {r["match_id"] for r in survivants} == {rows[0]["id"]}, \
+                "pronos pas migrés vers la ligne survivante"
+
+        print("db ok")
+    finally:
+        DB = ancien_db
+        try:
+            os.remove(fichier_temp)
+        except OSError:
+            pass
+
+
+if __name__ == "__main__":
+    demo()
