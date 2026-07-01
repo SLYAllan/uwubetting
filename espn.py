@@ -81,6 +81,22 @@ async def _get(path):
         return r.json()
 
 
+def _score_90(competitor, league_path):
+    """Score à la fin du temps réglementaire (1re + 2e mi-temps), sans
+    prolongation ni tirs au but. Seul le foot a ce concept (linescores =
+    [mi-temps1, mi-temps2, prol1, prol2, tab] quand la prolongation a lieu) ;
+    pour les autres sports (NBA...) on retombe sur le score final classique."""
+    if not league_path.startswith("soccer/"):
+        return None
+    lignes = competitor.get("linescores") or []
+    if len(lignes) < 2:
+        return None
+    try:
+        return sum(int(float(l.get("displayValue"))) for l in lignes[:2])
+    except (TypeError, ValueError):
+        return None
+
+
 def _normalize(event, league_path, comp_nom, comp_logo):
     comp = (event.get("competitions") or [{}])[0]
     cs = comp.get("competitors") or []
@@ -93,6 +109,8 @@ def _normalize(event, league_path, comp_nom, comp_logo):
         "strAwayTeam": (away.get("team") or {}).get("displayName") or "?",
         "intHomeScore": _int(home.get("score")),
         "intAwayScore": _int(away.get("score")),
+        "intHomeScore90": _score_90(home, league_path),
+        "intAwayScore90": _score_90(away, league_path),
         "strTimestamp": event.get("date"),
         "dateEvent": (event.get("date") or "")[:10],
         "strStatus": status.get("name"),

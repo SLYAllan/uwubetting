@@ -38,6 +38,15 @@ def _score(ev):
     return _int(ev.get("intHomeScore")), _int(ev.get("intAwayScore"))
 
 
+def _score_90(ev):
+    """Score à 90 minutes pour le bonus score exact. Retombe sur le score
+    final quand le provider ne distingue pas (esport, NBA, pas de prolongation)."""
+    sd, se = _int(ev.get("intHomeScore90")), _int(ev.get("intAwayScore90"))
+    if sd is None or se is None:
+        return _score(ev)
+    return sd, se
+
+
 def _kickoff(ev):
     ts = ev.get("strTimestamp")
     if ts:
@@ -104,7 +113,7 @@ async def refresh_matchs():
         log.info("refresh %s: %d matchs", lg["nom"], len(events))
 
 
-def _finaliser(c, m, sd, se):
+def _finaliser(c, m, sd, se, sd90, se90):
     """Calcule les points de tous les pronos d'un match et le marque résolu.
     Retourne (total_pts, nb_bons, nb_pronos) pour l'annonce de fin."""
     pronos = db.pronos_du_match(c, m["id"])
@@ -112,7 +121,7 @@ def _finaliser(c, m, sd, se):
     for p in pronos:
         serie, best = db.get_streak(c, p["user_id"])
         pts, bon, nser = scoring.calcul_points(
-            p["resultat"], p["score_dom"], p["score_ext"], sd, se, serie)
+            p["resultat"], p["score_dom"], p["score_ext"], sd, se, serie, sd90, se90)
         db.set_prono_points(c, p["id"], pts)
         db.set_streak(c, p["user_id"], nser, max(best, nser))
         total += pts
@@ -146,8 +155,9 @@ async def resoudre_matchs():
         statut = prov.mapper_statut(ev.get("strStatus"), has, True)
 
         if statut == "termine" and has:
+            sd90, se90 = _score_90(ev)
             with db.conn() as c:
-                total, bons, nb = _finaliser(c, m, sd, se)
+                total, bons, nb = _finaliser(c, m, sd, se, sd90, se90)
             log.info("résolu %s (%s-%s): %d pts sur %d pronos",
                      m["sportsdb_event_id"], sd, se, total, nb)
             await _annoncer_fin(m, sd, se, total, bons, nb)
@@ -241,8 +251,9 @@ async def suivre_matchs():
         if statut == "termine":
             if ancien_sd is not None and (sd, se) != (ancien_sd, ancien_se):
                 await _annoncer_score(m, sd, se, ancien_sd, ancien_se)
+            sd90, se90 = _score_90(ev)
             with db.conn() as c:
-                total, bons, nb = _finaliser(c, m, sd, se)
+                total, bons, nb = _finaliser(c, m, sd, se, sd90, se90)
             log.info("résolu (live) %s (%s-%s): %d pts sur %d pronos",
                      m["sportsdb_event_id"], sd, se, total, nb)
             await _annoncer_fin(m, sd, se, total, bons, nb)

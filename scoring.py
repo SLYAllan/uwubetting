@@ -45,9 +45,14 @@ def score_valide_pour_bo(bo, sd, se):
     return gagnant == seuil and 0 <= perdant < seuil
 
 
-def calcul_points(resultat_pred, sd_pred, se_pred, sd_reel, se_reel, serie_avant):
+def calcul_points(resultat_pred, sd_pred, se_pred, sd_reel, se_reel, serie_avant,
+                   sd90=None, se90=None):
     """Retourne (points, bon, nouvelle_serie) pour un match TERMINÉ.
 
+    Le résultat (1/N/2) se juge sur sd_reel/se_reel (score après prolongation
+    éventuelle, hors tirs au but). Le bonus score exact se juge sur sd90/se90
+    (score à 90 minutes) quand fournis -- sinon on retombe sur sd_reel/se_reel
+    (esport, NBA : pas de notion de prolongation).
     serie_avant = streaks.serie_actuelle du joueur avant ce match (chronologique).
     """
     bon = resultat_pred == resultat_depuis_score(sd_reel, se_reel)
@@ -55,19 +60,22 @@ def calcul_points(resultat_pred, sd_pred, se_pred, sd_reel, se_reel, serie_avant
         return 0, False, 0  # série cassée
     nouvelle_serie = serie_avant + 1
     pts = POINTS_BON
+    sd_exact = sd_reel if sd90 is None else sd90
+    se_exact = se_reel if se90 is None else se90
     if sd_pred is not None and se_pred is not None \
-            and sd_pred == sd_reel and se_pred == se_reel:
+            and sd_pred == sd_exact and se_pred == se_exact:
         pts += BONUS_EXACT
     if nouvelle_serie >= SEUIL_FEU:
         pts += BONUS_FEU
     return pts, True, nouvelle_serie
 
 
-def points_si_termine(statut, resultat_pred, sd_pred, se_pred, sd_reel, se_reel, serie_avant):
+def points_si_termine(statut, resultat_pred, sd_pred, se_pred, sd_reel, se_reel, serie_avant,
+                       sd90=None, se90=None):
     """Reporté/annulé => 0 pt, série inchangée. Sinon délègue à calcul_points."""
     if statut != "termine":
         return 0, False, serie_avant
-    return calcul_points(resultat_pred, sd_pred, se_pred, sd_reel, se_reel, serie_avant)
+    return calcul_points(resultat_pred, sd_pred, se_pred, sd_reel, se_reel, serie_avant, sd90, se90)
 
 
 def pourcentage_reussite(pronos):
@@ -107,6 +115,11 @@ def demo():
 
     # match reporté => 0 pt, série inchangée
     assert points_si_termine("reporte", "1", None, None, 2, 1, 4) == (0, False, 4)
+
+    # prolongation : nul à 90' (2-2), dom gagne après prolongation (3-2)
+    # -> résultat jugé sur 3-2 (victoire dom), score exact jugé sur 2-2
+    assert calcul_points("1", 2, 2, 3, 2, 0, sd90=2, se90=2) == (8, True, 1)
+    assert calcul_points("N", 2, 2, 3, 2, 0, sd90=2, se90=2) == (0, False, 0)
 
     # cohérence score / format de match
     assert score_valide_pour_bo(None, 1, 1) is True        # nul autorisé au foot
