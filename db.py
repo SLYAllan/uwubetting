@@ -287,6 +287,13 @@ def upsert_prono(user_id, username, match_id, resultat, sd, se):
         """, (user_id, username, match_id, resultat, sd, se, now, now))
 
 
+def supprimer_prono(user_id, match_id):
+    with conn() as c:
+        return c.execute(
+            "DELETE FROM pronos WHERE user_id=? AND match_id=?",
+            (user_id, match_id)).rowcount
+
+
 def mes_pronos(user_id):
     with conn() as c:
         return c.execute("""

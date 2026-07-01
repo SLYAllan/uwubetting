@@ -16,6 +16,7 @@ async def aide_cmd(itx: discord.Interaction):
         "`/prono match:<#> score:<2-1>` — ton prono, score exact obligatoire "
         "(nul possible au foot, pas en esport Bo1/3/5) — public, "
         "modifiable jusqu'au coup d'envoi\n"
+        "`/prono_supprimer match:<#>` — supprime ton prono (avant coup d'envoi)\n"
         "`/mes_pronos` — tes pronos en cours\n"
         "`/classement [saison|semaine]` — le classement **de ce salon**\n"
         "`/sports` — les compétitions suivies\n"

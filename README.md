@@ -24,6 +24,7 @@ requirements.txt · .env.example · Dockerfile · docker-compose.yml · pronobot
 **Joueurs**
 - `/matchs [journee]` — matchs à venir **de ce salon** (boutons ◀️▶️ pour paginer)
 - `/prono match:<#> score:<2-1>` — score exact obligatoire (nul possible au foot, pas en esport BO1/3/5) ; public, modifiable jusqu'au coup d'envoi
+- `/prono_supprimer match:<#>` — supprime ton prono (impossible après le coup d'envoi)
 - `/mes_pronos` — tes pronos en cours
 - `/classement [saison|semaine]` — classement **de ce salon**, + ton rang
 - `/sports` · `/aide`

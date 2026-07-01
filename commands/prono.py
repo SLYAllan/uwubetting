@@ -11,18 +11,24 @@ import ui
 _SCORE_RE = re.compile(r"\s*(\d+)\s*-\s*(\d+)\s*")
 
 
+def _match_ouvert(m):
+    """Message d'erreur si le match n'existe pas ou a déjà commencé, sinon None."""
+    if not m:
+        return "Match introuvable (vérifie le # dans /matchs)."
+    if (db.parse_dt(m["date_kickoff_utc"]) or db.now_utc()) <= db.now_utc():
+        return "Trop tard, ce match a déjà commencé."
+    return None
+
+
 @app_commands.command(name="prono", description="Enregistre ou modifie ton prono")
 @app_commands.describe(match="Numéro affiché par /matchs",
                        score="Score exact, ex '2-1' (foot, nul possible), "
                              "'2-0' (Bo3) ou '3-1' (Bo5, pas de nul en esport)")
 async def prono_cmd(itx: discord.Interaction, match: int, score: str):
     m = db.match_by_numero(match)
-    if not m:
-        return await itx.response.send_message(
-            "Match introuvable (vérifie le # dans /matchs).", ephemeral=True)
-    if (db.parse_dt(m["date_kickoff_utc"]) or db.now_utc()) <= db.now_utc():
-        return await itx.response.send_message(
-            "Trop tard, ce match a déjà commencé.", ephemeral=True)
+    err = _match_ouvert(m)
+    if err:
+        return await itx.response.send_message(err, ephemeral=True)
 
     mm = _SCORE_RE.fullmatch(score)
     if not mm:
@@ -57,5 +63,25 @@ async def prono_cmd(itx: discord.Interaction, match: int, score: str):
     await itx.response.send_message(embed=e)
 
 
+@app_commands.command(name="prono_supprimer", description="Supprime ton prono sur un match")
+@app_commands.describe(match="Numéro affiché par /matchs")
+async def prono_supprimer_cmd(itx: discord.Interaction, match: int):
+    m = db.match_by_numero(match)
+    err = _match_ouvert(m)
+    if err:
+        return await itx.response.send_message(err, ephemeral=True)
+
+    if not db.supprimer_prono(str(itx.user.id), m["id"]):
+        return await itx.response.send_message(
+            "Tu n'as pas de prono sur ce match.", ephemeral=True)
+
+    e = discord.Embed(
+        title="🗑️ Prono supprimé", color=ui.couleur(m["bo"]),
+        description=f"**{m['equipe_dom']}**  🆚  **{m['equipe_ext']}**")
+    e.set_author(name=itx.user.display_name, icon_url=itx.user.display_avatar.url)
+    await itx.response.send_message(embed=e)
+
+
 def register(tree, guild):
     tree.add_command(prono_cmd, guild=guild)
+    tree.add_command(prono_supprimer_cmd, guild=guild)
