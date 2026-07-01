@@ -1,8 +1,8 @@
 """Provider esport PandaScore (LoL, CS2, Valorant, Dota...).
 
-Interface identique à sportsdb.py (events_saison / lookup_event / mapper_statut)
+Interface identique à espn.py (events_saison / lookup_event / mapper_statut)
 pour être interchangeable. Les matchs PandaScore sont normalisés vers le même
-format de dict que TheSportsDB, donc scheduler.py n'a pas à connaître la source.
+format de dict qu'espn.py, donc scheduler.py n'a pas à connaître la source.
 
 Le score = nombre de maps gagnées (Bo3/Bo5). Auth par token Bearer.
 """
@@ -130,7 +130,7 @@ async def search_leagues(query, jeu=None):
 
 def mapper_statut(api_status, a_un_score, kickoff_passe):
     """Statut PandaScore (explicite) -> statut interne. has_score/kickoff non
-    utilisés mais gardés pour une signature identique à sportsdb.mapper_statut."""
+    utilisés mais gardés pour une signature identique à espn.mapper_statut."""
     s = (api_status or "").lower()
     if s == "postponed":
         return "reporte"

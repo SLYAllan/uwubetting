@@ -10,7 +10,6 @@ import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import db
-import sportsdb
 import pandascore
 import espn
 import scoring
@@ -20,11 +19,11 @@ log = logging.getLogger("pronobot.scheduler")
 _sched = AsyncIOScheduler(timezone="UTC")
 _client = None  # client Discord, pour annoncer dans les salons
 
-PROVIDERS = {"sportsdb": sportsdb, "pandascore": pandascore, "espn": espn}
+PROVIDERS = {"pandascore": pandascore, "espn": espn}
 
 
 def _prov(name):
-    return PROVIDERS.get((name or "sportsdb").lower(), sportsdb)
+    return PROVIDERS.get((name or "espn").lower(), espn)
 
 
 def _int(x):

@@ -13,8 +13,9 @@ async def aide_cmd(itx: discord.Interaction):
                     "\nChaque salon a son sport : tu ne vois que ses matchs.")
     e.add_field(name="🎮 Joueurs", value=(
         "`/matchs [journee]` — les matchs à parier **dans ce salon**\n"
-        "`/prono match:<#> resultat:<1|N|2> [score:2-1]` — ton prono "
-        "(modifiable jusqu'au coup d'envoi)\n"
+        "`/prono match:<#> score:<2-1>` — ton prono, score exact obligatoire "
+        "(nul possible au foot, pas en esport Bo1/3/5) — public, "
+        "modifiable jusqu'au coup d'envoi\n"
         "`/mes_pronos` — tes pronos en cours\n"
         "`/classement [saison|semaine]` — le classement **de ce salon**\n"
         "`/sports` — les compétitions suivies\n"
@@ -26,23 +27,21 @@ async def aide_cmd(itx: discord.Interaction):
         "`/sport_ajouter provider:<> league_id:<> nom:<> salon:<#>` — "
         "lier une compétition à un salon (ex CDM 2026, LEC…)\n"
         "`/sport_retirer league_id:<>` — délier\n"
-        "`/refresh` — forcer la mise à jour des matchs\n"
+        "`/refresh` — forcer la mise à jour des matchs (silencieux)\n"
+        "`/matchs_actualiser` — resynchronise ET affiche les prochains matchs "
+        "de ce salon\n"
         "`/chercher_ligue provider:<> nom:<> [jeu:<>]` — **trouver l'ID** d'un "
         "tournoi sans quitter Discord"), inline=False)
     e.add_field(name="🔎 Trouver l'ID d'un tournoi", value=(
         "Le plus simple : **`/chercher_ligue`** (ex `nom:LEC jeu:League of Legends`, "
         "ou `provider:Foot/NBA nom:Premier`).\n\n"
-        "Ou parcourir les listes complètes :\n"
-        "• Foot/NBA : [toutes les ligues TheSportsDB]"
-        "(https://www.thesportsdb.com/api/v1/json/3/all_leagues.php) "
-        "(Ctrl+F le nom → `idLeague`)\n"
+        "• Foot/NBA (ESPN, gratuit, sans clé) : `/chercher_ligue provider:ESPN "
+        "nom:<mot-clé>` (ex `Coupe du Monde`, `Premier League`, `NBA`)\n"
         "• Esport : [API PandaScore /leagues]"
-        "(https://developers.pandascore.co/reference/get_leagues)\n"
-        "• Foot gratuit complet (ESPN, sans clé, calendrier complet type CDM) : "
-        "`/chercher_ligue provider:ESPN nom:<mot-clé>` (ex `Coupe du Monde`, "
-        "`Premier League`)\n\n"
-        "IDs courants : 4328 Premier League · 4334 Ligue 1 · 4387 NBA · "
-        "4480 Champions League · 4197 LEC · 293 LCK · `fifa.world` CDM (ESPN)"),
+        "(https://developers.pandascore.co/reference/get_leagues)\n\n"
+        "IDs ESPN courants : `soccer/fifa.world` CDM · `soccer/eng.1` Premier League · "
+        "`soccer/fra.1` Ligue 1 · `basketball/nba` NBA · 4197 LEC (PandaScore) · "
+        "293 LCK (PandaScore)"),
         inline=False)
     await itx.response.send_message(embed=e, ephemeral=True)
 

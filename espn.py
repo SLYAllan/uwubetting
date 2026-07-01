@@ -1,11 +1,12 @@
-"""Provider football GRATUIT via l'API publique ESPN (aucune clé requise).
+"""Provider football + NBA GRATUIT via l'API publique ESPN (aucune clé requise).
 
-Couvre la Coupe du Monde, les Euros, la C1/C3 et les grands championnats, avec
-le calendrier complet (matchs à venir compris) — contrairement au tier gratuit
-de TheSportsDB qui plafonne. Interface identique aux autres providers.
+Couvre la Coupe du Monde, les Euros, la C1/C3, les grands championnats et la
+NBA, avec le calendrier complet (matchs à venir compris). Interface identique
+aux autres providers.
 
-L'id ESPN seul ne suffit pas à requêter un match (il faut le slug de ligue), donc
-on encode l'id sous la forme "slug:eventId" (ex "fifa.world:760490").
+`league_id` = chemin ESPN "sport/ligue" (ex "soccer/fifa.world", "basketball/nba").
+L'id ESPN seul ne suffit pas à requêter un match (il faut ce chemin), donc on
+encode l'id sous la forme "chemin:eventId" (ex "soccer/fifa.world:760490").
 """
 import time
 import asyncio
@@ -17,7 +18,7 @@ import httpx
 import db
 
 log = logging.getLogger("pronobot.espn")
-_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
+_BASE = "https://site.api.espn.com/apis/site/v2/sports"
 _HEADERS = {"User-Agent": "Mozilla/5.0"}
 _MIN_INTERVAL = 0.4
 _RETRYABLE = (429, 500, 502, 503, 504)
@@ -25,19 +26,20 @@ _RETRYABLE = (429, 500, 502, 503, 504)
 _lock = asyncio.Lock()
 _last = 0.0
 
-# Slugs ESPN des compétitions courantes (catalogue pour /chercher_ligue)
+# Chemins ESPN des compétitions courantes (catalogue pour /chercher_ligue)
 _LEAGUES = {
-    "fifa.world": "Coupe du Monde",
-    "fifa.cwc": "Coupe du Monde des Clubs",
-    "uefa.euro": "Euro",
-    "uefa.champions": "Ligue des Champions",
-    "uefa.europa": "Ligue Europa",
-    "eng.1": "Premier League",
-    "esp.1": "LaLiga",
-    "ita.1": "Serie A",
-    "ger.1": "Bundesliga",
-    "fra.1": "Ligue 1",
-    "usa.1": "MLS",
+    "soccer/fifa.world": "Coupe du Monde",
+    "soccer/fifa.cwc": "Coupe du Monde des Clubs",
+    "soccer/uefa.euro": "Euro",
+    "soccer/uefa.champions": "Ligue des Champions",
+    "soccer/uefa.europa": "Ligue Europa",
+    "soccer/eng.1": "Premier League",
+    "soccer/esp.1": "LaLiga",
+    "soccer/ita.1": "Serie A",
+    "soccer/ger.1": "Bundesliga",
+    "soccer/fra.1": "Ligue 1",
+    "soccer/usa.1": "MLS",
+    "basketball/nba": "NBA",
 }
 
 
@@ -79,14 +81,14 @@ async def _get(path):
         return r.json()
 
 
-def _normalize(event, slug, comp_nom, comp_logo):
+def _normalize(event, league_path, comp_nom, comp_logo):
     comp = (event.get("competitions") or [{}])[0]
     cs = comp.get("competitors") or []
     home = next((c for c in cs if c.get("homeAway") == "home"), {})
     away = next((c for c in cs if c.get("homeAway") == "away"), {})
     status = (comp.get("status") or {}).get("type") or {}
     return {
-        "idEvent": f"{slug}:{event.get('id')}",
+        "idEvent": f"{league_path}:{event.get('id')}",
         "strHomeTeam": (home.get("team") or {}).get("displayName") or "?",
         "strAwayTeam": (away.get("team") or {}).get("displayName") or "?",
         "intHomeScore": _int(home.get("score")),
@@ -104,27 +106,28 @@ def _normalize(event, slug, comp_nom, comp_logo):
 
 
 async def events_saison(league_id, season):
-    """`league_id` = slug ESPN (ex 'fifa.world'). `season` ignoré : on récupère
-    une fenêtre glissante (récents + ~1 mois à venir) pour avoir les matchs
-    pariables et ceux à résoudre."""
+    """`league_id` = chemin ESPN "sport/ligue" (ex 'soccer/fifa.world',
+    'basketball/nba'). `season` ignoré : on récupère une fenêtre glissante
+    (récents + ~1 mois à venir) pour avoir les matchs pariables et ceux à
+    résoudre."""
     d1 = (db.now_utc() - timedelta(days=3)).strftime("%Y%m%d")
     d2 = (db.now_utc() + timedelta(days=30)).strftime("%Y%m%d")
     data = await _get(f"{league_id}/scoreboard?dates={d1}-{d2}")
     lg = (data.get("leagues") or [{}])[0]
-    comp_nom = lg.get("name") or league_id
+    comp_nom = lg.get("name") or _LEAGUES.get(league_id, league_id)
     comp_logo = (lg.get("logos") or [{}])[0].get("href")
     return [_normalize(e, league_id, comp_nom, comp_logo)
             for e in (data.get("events") or [])]
 
 
 async def lookup_event(event_id):
-    slug, _, eid = event_id.partition(":")
-    data = await _get(f"{slug}/summary?event={eid}")
+    league_path, _, eid = event_id.partition(":")
+    data = await _get(f"{league_path}/summary?event={eid}")
     hdr = data.get("header") or {}
     comp = (hdr.get("competitions") or [{}])[0]
     event = {"id": eid, "date": comp.get("date"), "competitions": [comp]}
-    nom = (hdr.get("league") or {}).get("name") or _LEAGUES.get(slug, slug)
-    return _normalize(event, slug, nom, None)
+    nom = (hdr.get("league") or {}).get("name") or _LEAGUES.get(league_path, league_path)
+    return _normalize(event, league_path, nom, None)
 
 
 def mapper_statut(api_status, a_un_score, kickoff_passe):
@@ -136,12 +139,14 @@ def mapper_statut(api_status, a_un_score, kickoff_passe):
     if "FULL_TIME" in s or "FINAL" in s or s == "STATUS_FT":
         return "termine"
     if any(k in s for k in ("HALF", "IN_PROGRESS", "IN_PLAY", "FIRST",
-                            "SECOND", "OVERTIME", "PENALT", "STATUS_RESCHED")):
+                            "SECOND", "THIRD", "FOURTH", "QUARTER",
+                            "OVERTIME", "PENALT", "STATUS_RESCHED")):
         return "en_cours" if "RESCHED" not in s else "a_venir"
     return "a_venir"
 
 
 async def search_leagues(query, jeu=None):
     q = query.lower()
-    return [{"id": k, "nom": v, "jeu": "Foot"} for k, v in _LEAGUES.items()
+    return [{"id": k, "nom": v, "jeu": "Foot" if k.startswith("soccer/") else "NBA"}
+            for k, v in _LEAGUES.items()
             if q in v.lower() or q in k.lower()]

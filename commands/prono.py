@@ -44,8 +44,9 @@ async def prono_cmd(itx: discord.Interaction, match: int, score: str):
     e = discord.Embed(
         title="✅ Prono enregistré", color=ui.couleur(m["bo"]),
         description=f"**{m['equipe_dom']}**  🆚  **{m['equipe_ext']}**\n\n"
-                    f"Ton prono : **{detail}**"
+                    f"Prono : **{detail}**"
                     + (f"   ·   🎮 {m['bo']}" if m["bo"] else ""))
+    e.set_author(name=itx.user.display_name, icon_url=itx.user.display_avatar.url)
     if m["dom_logo"]:
         e.set_thumbnail(url=m["dom_logo"])
     e.add_field(
@@ -53,7 +54,7 @@ async def prono_cmd(itx: discord.Interaction, match: int, score: str):
         value=f"🕐 {ui.jour_label(loc)} {ui.heure_label(loc)} (Paris) · "
               f"⏱️ {ui.countdown(m['date_kickoff_utc'])}")
     e.set_footer(text="Modifiable jusqu'au coup d'envoi · score exact = 8 pts")
-    await itx.response.send_message(embed=e, ephemeral=True)
+    await itx.response.send_message(embed=e)
 
 
 def register(tree, guild):

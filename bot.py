@@ -36,7 +36,7 @@ def seed_league():
     ensuite avec /sport_ajouter). Optionnel : tout peut se gérer par commande."""
     lid = os.environ.get("LEAGUE_ID")
     if lid and not db.list_leagues():
-        db.add_league(lid, os.environ.get("PROVIDER", "sportsdb"),
+        db.add_league(lid, os.environ.get("PROVIDER", "espn"),
                       os.environ.get("LEAGUE_NOM", "Ligue"),
                       os.environ.get("SEASON", ""), None)
 

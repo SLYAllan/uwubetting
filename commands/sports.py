@@ -4,12 +4,11 @@ from discord import app_commands
 
 import db
 import scheduler
-import sportsdb
 import pandascore
 import espn
 
 ADMIN = app_commands.checks.has_permissions(manage_guild=True)
-_MODS = {"sportsdb": sportsdb, "pandascore": pandascore, "espn": espn}
+_MODS = {"pandascore": pandascore, "espn": espn}
 
 
 @app_commands.command(name="sport_ajouter",
@@ -20,9 +19,8 @@ _MODS = {"sportsdb": sportsdb, "pandascore": pandascore, "espn": espn}
                        salon="Salon où les matchs vont apparaître",
                        saison="Saison foot/NBA (ex 2025-2026) ; vide en esport")
 @app_commands.choices(provider=[
-    app_commands.Choice(name="Foot / NBA (TheSportsDB)", value="sportsdb"),
+    app_commands.Choice(name="Foot / NBA (ESPN, gratuit)", value="espn"),
     app_commands.Choice(name="Esport (PandaScore)", value="pandascore"),
-    app_commands.Choice(name="Foot gratuit complet (ESPN)", value="espn"),
 ])
 @ADMIN
 async def sport_ajouter(itx: discord.Interaction,
@@ -78,9 +76,8 @@ async def refresh_cmd(itx: discord.Interaction):
                        jeu="Esport : précise le jeu pour un résultat fiable")
 @app_commands.choices(
     provider=[
-        app_commands.Choice(name="Foot / NBA (TheSportsDB)", value="sportsdb"),
+        app_commands.Choice(name="Foot / NBA (ESPN, gratuit)", value="espn"),
         app_commands.Choice(name="Esport (PandaScore)", value="pandascore"),
-        app_commands.Choice(name="Foot gratuit complet (ESPN)", value="espn"),
     ],
     jeu=[
         app_commands.Choice(name="League of Legends", value="lol"),
