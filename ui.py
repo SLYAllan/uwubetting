@@ -54,11 +54,22 @@ def barre(pct):
     return "▰" * plein + "▱" * (5 - plein)
 
 
-PAR_PAGE = 8  # 8 matchs/page -> au pire 16 champs, sous la limite Discord (25)
+PAR_PAGE = 8  # matchs/page max PAR JOUR -> au pire 16 champs, sous la limite Discord (25)
 
 
 def paginer(rows, par_page=PAR_PAGE):
-    return [rows[i:i + par_page] for i in range(0, len(rows), par_page)] or [[]]
+    """Une page par jour (jamais deux jours mélangés sur une page). Un jour
+    avec plus de `par_page` matchs se scinde quand même en plusieurs pages."""
+    pages = []
+    jour_courant, bloc = None, []
+    for r in rows:
+        jour = jour_label(en_paris(r["date_kickoff_utc"]))
+        if jour != jour_courant:
+            pages += [bloc[i:i + par_page] for i in range(0, len(bloc), par_page)]
+            jour_courant, bloc = jour, []
+        bloc.append(r)
+    pages += [bloc[i:i + par_page] for i in range(0, len(bloc), par_page)]
+    return pages or [[]]
 
 
 def matchs_embed(rows, titre, page=1, total=1):
@@ -87,7 +98,7 @@ def matchs_embed(rows, titre, page=1, total=1):
         e.add_field(name=f"#{r['numero']} · {r['equipe_dom']} 🆚 {r['equipe_ext']}",
                     value=" · ".join(infos), inline=False)
 
-    pied = "/prono match:<#> resultat:<1|N|2> [score:2-1]"
+    pied = "/prono match:<#> score:<2-1>"
     if total > 1:
         pied = f"Page {page}/{total}  ·  " + pied
     e.set_footer(text=pied)
