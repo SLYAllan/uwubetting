@@ -104,9 +104,28 @@ async def refresh_matchs():
         log.info("refresh %s: %d matchs", lg["nom"], len(events))
 
 
+def _finaliser(c, m, sd, se):
+    """Calcule les points de tous les pronos d'un match et le marque résolu.
+    Retourne (total_pts, nb_bons, nb_pronos) pour l'annonce de fin."""
+    pronos = db.pronos_du_match(c, m["id"])
+    total, bons = 0, 0
+    for p in pronos:
+        serie, best = db.get_streak(c, p["user_id"])
+        pts, bon, nser = scoring.calcul_points(
+            p["resultat"], p["score_dom"], p["score_ext"], sd, se, serie)
+        db.set_prono_points(c, p["id"], pts)
+        db.set_streak(c, p["user_id"], nser, max(best, nser))
+        total += pts
+        bons += bon
+    db.finalise_match(c, m["id"], "termine", sd, se)
+    return total, bons, len(pronos)
+
+
 async def resoudre_matchs():
     """Toutes les heures : résout les matchs dont le coup d'envoi est passé.
-    Idempotent (resolu=1 exclut du calcul). Chaque match utilise son provider."""
+    Filet de sécurité pour la NBA (non couverte par le suivi live) et pour
+    tout match que suivre_matchs aurait raté. Idempotent (resolu=1 exclut du
+    calcul) : ne refait jamais un match déjà résolu par suivre_matchs."""
     a_traiter = sorted(
         (m for m in db.matchs_a_resoudre()
          if (db.parse_dt(m["date_kickoff_utc"]) or db.now_utc()) <= db.now_utc()),
@@ -126,21 +145,16 @@ async def resoudre_matchs():
         has = sd is not None and se is not None
         statut = prov.mapper_statut(ev.get("strStatus"), has, True)
 
+        if statut == "termine" and has:
+            with db.conn() as c:
+                total, bons, nb = _finaliser(c, m, sd, se)
+            log.info("résolu %s (%s-%s): %d pts sur %d pronos",
+                     m["sportsdb_event_id"], sd, se, total, nb)
+            await _annoncer_fin(m, sd, se, total, bons, nb)
+            continue
+
         with db.conn() as c:
-            if statut == "termine" and has:
-                pronos = db.pronos_du_match(c, m["id"])
-                total = 0
-                for p in pronos:
-                    serie, best = db.get_streak(c, p["user_id"])
-                    pts, _bon, nser = scoring.calcul_points(
-                        p["resultat"], p["score_dom"], p["score_ext"], sd, se, serie)
-                    db.set_prono_points(c, p["id"], pts)
-                    db.set_streak(c, p["user_id"], nser, max(best, nser))
-                    total += pts
-                db.finalise_match(c, m["id"], "termine", sd, se)
-                log.info("résolu %s (%s-%s): %d pts sur %d pronos",
-                         m["sportsdb_event_id"], sd, se, total, len(pronos))
-            elif statut == "annule":
+            if statut == "annule":
                 db.finalise_match(c, m["id"], "annule", None, None)
             elif statut == "reporte":
                 db.set_statut(c, m["id"], "reporte")
@@ -154,13 +168,17 @@ def _sport_bruyant(m):
     return not (m["league"] or "").startswith("basketball/")
 
 
-async def _annoncer_score(m, sd, se, ancien_sd, ancien_se):
+def _channel_de(m):
     if not _client:
-        return
+        return None
     lg = db.league_by_id(m["league"])
     if not (lg and lg["channel_id"]):
-        return
-    ch = _client.get_channel(int(lg["channel_id"]))
+        return None
+    return _client.get_channel(int(lg["channel_id"]))
+
+
+async def _annoncer_score(m, sd, se, ancien_sd, ancien_se):
+    ch = _channel_de(m)
     if not ch:
         return
     qui = None
@@ -178,14 +196,30 @@ async def _annoncer_score(m, sd, se, ancien_sd, ancien_se):
     try:
         await ch.send(embed=e)
     except Exception:
-        log.exception("annonce score impossible dans %s", lg["channel_id"])
+        log.exception("annonce score impossible pour %s", m["league"])
+
+
+async def _annoncer_fin(m, sd, se, total_pts, nb_bons, nb_pronos):
+    ch = _channel_de(m)
+    if not ch:
+        return
+    e = discord.Embed(
+        title="🏁 Match terminé !", color=ui.couleur(m["bo"]),
+        description=f"**{m['equipe_dom']}**  {sd} - {se}  **{m['equipe_ext']}**")
+    if nb_pronos:
+        e.add_field(name="Pronos",
+                    value=f"{nb_bons}/{nb_pronos} bons · {total_pts} pts distribués")
+    try:
+        await ch.send(embed=e)
+    except Exception:
+        log.exception("annonce fin de match impossible pour %s", m["league"])
 
 
 async def suivre_matchs():
-    """Toutes les ~90s : traque les matchs en cours et annonce les buts (foot)
-    ou changements de score (esport, = maps gagnées). Ne touche pas aux matchs
-    déjà 'termine' (la résolution/le calcul des points reste géré par
-    resoudre_matchs, une heure au plus tard)."""
+    """Toutes les ~90s : traque les matchs en cours. Annonce les buts (foot)
+    ou changements de score (esport, = maps gagnées), et dès que le match est
+    'termine' calcule les points et annonce le résultat final (au lieu
+    d'attendre resoudre_matchs, jusqu'à 1h plus tard)."""
     candidats = [m for m in db.matchs_a_resoudre()
                 if _sport_bruyant(m)
                 and (db.parse_dt(m["date_kickoff_utc"]) or db.now_utc()) <= db.now_utc()]
@@ -203,9 +237,19 @@ async def suivre_matchs():
             continue
         ancien_sd, ancien_se = m["score_dom"], m["score_ext"]
         statut = prov.mapper_statut(ev.get("strStatus"), True, True)
-        if statut != "termine":
+
+        if statut == "termine":
+            if ancien_sd is not None and (sd, se) != (ancien_sd, ancien_se):
+                await _annoncer_score(m, sd, se, ancien_sd, ancien_se)
             with db.conn() as c:
-                db.maj_score_live(c, m["id"], statut, sd, se)
+                total, bons, nb = _finaliser(c, m, sd, se)
+            log.info("résolu (live) %s (%s-%s): %d pts sur %d pronos",
+                     m["sportsdb_event_id"], sd, se, total, nb)
+            await _annoncer_fin(m, sd, se, total, bons, nb)
+            continue
+
+        with db.conn() as c:
+            db.maj_score_live(c, m["id"], statut, sd, se)
         if ancien_sd is not None and (sd, se) != (ancien_sd, ancien_se):
             await _annoncer_score(m, sd, se, ancien_sd, ancien_se)
 
