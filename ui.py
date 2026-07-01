@@ -99,12 +99,6 @@ def matchs_embed(rows, titre, page=1, total=1):
     return e
 
 
-def matchs_pages(rows, titre):
-    """Liste d'embeds, un par page de matchs (sans boutons, pour les annonces auto)."""
-    pages = paginer(rows)
-    return [matchs_embed(p, titre, i + 1, len(pages)) for i, p in enumerate(pages)]
-
-
 class ProsRapidesModal(discord.ui.Modal, title="Pronos rapides"):
     """Un prono par ligne (numero:score), pour parier sur toute une page
     d'un coup au lieu d'enchaîner les /prono un par un."""

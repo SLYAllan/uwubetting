@@ -58,9 +58,11 @@ async def _annoncer(lg):
     if not ch:
         log.warning("salon %s introuvable pour %s", lg["channel_id"], lg["nom"])
         return
+    titre = f"🆕 {lg['nom']} — nouveaux matchs"
+    pages = ui.paginer(nouveaux)
+    embeds = [ui.matchs_embed(p, titre, i + 1, len(pages)) for i, p in enumerate(pages)]
     try:
-        for emb in ui.matchs_pages(nouveaux, f"🆕 {lg['nom']} — nouveaux matchs"):
-            await ch.send(embed=emb)
+        await ch.send(embed=embeds[0], view=ui.MatchsView(pages, embeds))
     except Exception:
         # ex: permissions manquantes dans le salon -> on log et on n'annonce
         # pas comme fait (réessai au prochain refresh), sans bloquer les autres
