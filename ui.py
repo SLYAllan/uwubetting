@@ -149,6 +149,7 @@ class ProsRapidesModal(discord.ui.Modal, title="Pronos rapides"):
             desc += ("\n\n" if desc else "") + "⚠️ **Erreurs**\n" + "\n".join(erreurs)
         e = discord.Embed(title="🎯 Pronos rapides", color=BLEU,
                           description=desc or "Rien à traiter.")
+        e.set_author(name=itx.user.display_name, icon_url=itx.user.display_avatar.url)
         await itx.response.send_message(embed=e)
 
 
