@@ -80,25 +80,6 @@ def calcul_points(resultat_pred, sd_pred, se_pred, sd_reel, se_reel, serie_avant
     return pts, resultat_ok, nouvelle_serie
 
 
-def points_si_termine(statut, resultat_pred, sd_pred, se_pred, sd_reel, se_reel, serie_avant,
-                       sd90=None, se90=None):
-    """Reporté/annulé => 0 pt, série inchangée. Sinon délègue à calcul_points."""
-    if statut != "termine":
-        return 0, False, serie_avant
-    return calcul_points(resultat_pred, sd_pred, se_pred, sd_reel, se_reel, serie_avant, sd90, se90)
-
-
-def pourcentage_reussite(pronos):
-    """% réussite = bons / résolus. Ignore les matchs non terminés.
-
-    pronos: itérable de dicts avec 'termine' (bool) et 'bon' (bool).
-    """
-    resolus = [p for p in pronos if p["termine"]]
-    if not resolus:
-        return 0.0
-    return sum(1 for p in resolus if p["bon"]) / len(resolus) * 100
-
-
 def demo():
     assert resultat_depuis_score(2, 1) == "1"
     assert resultat_depuis_score(0, 0) == "N"
@@ -123,9 +104,6 @@ def demo():
         _, _, serie = calcul_points(pred, None, None, 2, 1, serie)
     assert serie == 0
 
-    # match reporté => 0 pt, série inchangée
-    assert points_si_termine("reporte", "1", None, None, 2, 1, 4) == (0, False, 4)
-
     # prolongation : nul à 90' (2-2), dom gagne après prolongation (3-2).
     # Pari "2-2" (nul) : résultat faux (c'est une victoire après prolongation)
     # mais score pile bon à 90' -> 3 pts quand même, pas de bonus combo, série cassée
@@ -144,12 +122,6 @@ def demo():
     assert score_valide_pour_bo("Bo3", 3, 0) is False       # score impossible en Bo3
     assert score_valide_pour_bo("Bo5", 3, 2) is True
     assert score_valide_pour_bo("Bo5", 4, 0) is False
-
-    # % réussite ignore les matchs non résolus
-    pr = [{"termine": True, "bon": True},
-          {"termine": True, "bon": False},
-          {"termine": False, "bon": False}]
-    assert pourcentage_reussite(pr) == 50.0
 
     print("scoring ok")
 

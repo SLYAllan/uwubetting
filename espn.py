@@ -177,8 +177,8 @@ def mapper_statut(api_status, a_un_score, kickoff_passe):
         return "termine"
     if any(k in s for k in ("HALF", "IN_PROGRESS", "IN_PLAY", "FIRST",
                             "SECOND", "THIRD", "FOURTH", "QUARTER",
-                            "OVERTIME", "PENALT", "STATUS_RESCHED")):
-        return "en_cours" if "RESCHED" not in s else "a_venir"
+                            "OVERTIME", "PENALT")):
+        return "en_cours"
     return "a_venir"
 
 

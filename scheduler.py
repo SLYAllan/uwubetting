@@ -115,7 +115,12 @@ async def refresh_matchs():
 
 def _finaliser(c, m, sd, se, sd90, se90):
     """Calcule les points de tous les pronos d'un match et le marque résolu.
-    Retourne (total_pts, nb_bons, nb_pronos) pour l'annonce de fin."""
+    Retourne (total_pts, nb_bons, nb_pronos) pour l'annonce de fin, ou None si
+    un autre job (résolution horaire vs suivi live) l'a déjà résolu pendant
+    nos await réseau — sinon les séries seraient comptées deux fois."""
+    if c.execute("UPDATE matchs SET statut='termine', score_dom=?, score_ext=?, "
+                 "resolu=1 WHERE id=? AND resolu=0", (sd, se, m["id"])).rowcount == 0:
+        return None
     pronos = db.pronos_du_match(c, m["id"])
     total, bons = 0, 0
     for p in pronos:
@@ -126,7 +131,6 @@ def _finaliser(c, m, sd, se, sd90, se90):
         db.set_streak(c, p["user_id"], nser, max(best, nser))
         total += pts
         bons += bon
-    db.finalise_match(c, m["id"], "termine", sd, se)
     return total, bons, len(pronos)
 
 
@@ -157,7 +161,10 @@ async def resoudre_matchs():
         if statut == "termine" and has:
             sd90, se90 = _score_90(ev)
             with db.conn() as c:
-                total, bons, nb = _finaliser(c, m, sd, se, sd90, se90)
+                res = _finaliser(c, m, sd, se, sd90, se90)
+            if res is None:
+                continue
+            total, bons, nb = res
             log.info("résolu %s (%s-%s): %d pts sur %d pronos",
                      m["sportsdb_event_id"], sd, se, total, nb)
             await _annoncer_fin(m, sd, se, total, bons, nb)
@@ -259,7 +266,10 @@ async def suivre_matchs():
                 await _annoncer_score(m, sd, se, ancien_sd, ancien_se, ev.get("buts"))
             sd90, se90 = _score_90(ev)
             with db.conn() as c:
-                total, bons, nb = _finaliser(c, m, sd, se, sd90, se90)
+                res = _finaliser(c, m, sd, se, sd90, se90)
+            if res is None:
+                continue
+            total, bons, nb = res
             log.info("résolu (live) %s (%s-%s): %d pts sur %d pronos",
                      m["sportsdb_event_id"], sd, se, total, nb)
             await _annoncer_fin(m, sd, se, total, bons, nb)

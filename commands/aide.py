@@ -23,8 +23,8 @@ async def aide_cmd(itx: discord.Interaction):
         "`/sports` — les compétitions suivies\n"
         "`/aide` — ce message"), inline=False)
     e.add_field(name="🏆 Points", value=(
-        "Bon résultat **3 pts** · score exact **8 pts** · "
-        "série de 3 bons pronos ou + 🔥 **+1 pt** par bon prono"), inline=False)
+        "Bon résultat (après prolongation) **3 pts** · score exact (à 90') **3 pts** · "
+        "les deux **8 pts** · série de 3 bons pronos ou + 🔥 **+1 pt** par bon prono"), inline=False)
     e.add_field(name="📡 Suivi live", value=(
         "Une fois le match lancé, le bot annonce chaque but (foot) ou map "
         "gagnée (esport) dans le salon. Coup d'envoi affiché en direct "

@@ -36,7 +36,7 @@ async def prono_cmd(itx: discord.Interaction, match: int, score: str):
         name="Début du match" if m["bo"] else "Coup d'envoi",
         value=f"🕐 {ui.jour_label(loc)} {ui.heure_label(loc)} (Paris) · "
               f"⏱️ {ui.countdown(m['date_kickoff_utc'])}")
-    e.set_footer(text="Modifiable jusqu'au coup d'envoi · score exact = 8 pts")
+    e.set_footer(text="Modifiable jusqu'au coup d'envoi · résultat + score exact = 8 pts")
     await itx.response.send_message(embed=e)
 
 
