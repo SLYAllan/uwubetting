@@ -1,0 +1,25 @@
+# Déploiement par Dokploy sur le serveur maison (phase 4). Coolify utilise encore
+# docker-compose.yml jusqu'à la migration : ne pas toucher à celui-là avant.
+# TAG : le SHA à déployer, posé par le Dashboard ; sans lui, la dernière image de master.
+# SPORTSDB_API_KEY, posée en prod, n'est lue par aucun fichier : elle n'est pas reprise.
+services:
+  pronobot:
+    image: ghcr.io/slyallan/uwubetting:${TAG:-master}
+    restart: unless-stopped
+    mem_limit: 128m
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN:-}
+      GUILD_ID: ${GUILD_ID:-}
+      # Valeur par défaut du code : passée vide, elle l'écraserait.
+      PROVIDER: ${PROVIDER:-espn}
+      PANDASCORE_TOKEN: ${PANDASCORE_TOKEN:-}
+      LEAGUE_ID: ${LEAGUE_ID:-}
+      SEASON: ${SEASON:-}
+      DB_PATH: /data/pronobot.db
+    volumes:
+      - uwubetting-data:/data
+
+# Créé à la main sur le serveur, rempli depuis le Hetzner à la migration (annexe E.2).
+volumes:
+  uwubetting-data:
+    external: true

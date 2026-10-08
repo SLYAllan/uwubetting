@@ -147,3 +147,10 @@ ignoré (fenêtre glissante auto : J-3 à J+30).
 python scoring.py   # doit afficher "scoring ok"
 python db.py         # doit afficher "db ok" (fusion des matchs dupliqués)
 ```
+
+## Image et serveur maison
+
+À chaque push sur `master`, `.github/workflows/image.yml` construit l'image et la pousse
+dans GHCR (`ghcr.io/slyallan/uwubetting:<sha>` et `:master`). Sur une PR, l'image est
+construite sans être publiée. `compose.dokploy.yaml` servira au déploiement sur le
+serveur maison ; Coolify utilise encore `docker-compose.yml`.
