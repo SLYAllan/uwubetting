@@ -38,12 +38,6 @@ jobs:
           labels: org.opencontainers.image.source=https://github.com/SLYAllan/uwubetting
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Preuve provisoire, le contrôle voit une dépendance manquante
-        run: |
-          docker run --rm uwubetting:essai sh -c 'pip uninstall -qy APScheduler             && python -m compileall -q /app && echo "compileall : vert malgré le paquet retiré"'
-          if docker run --rm uwubetting:essai sh -c 'pip uninstall -qy APScheduler             && python scoring.py && python db.py && python -c "import scheduler, commands"'; then
-            echo "Le contrôle n'a pas vu le paquet retiré"; exit 1
-          fi
       - name: Le bot charge ses modules et passe ses auto-tests dans l'image
         # compileall ne chargeait aucun module : un paquet cassé (requirements en >=)
         # laissait la CI verte. bot.py reste dehors : il lit DISCORD_TOKEN dès son chargement.
