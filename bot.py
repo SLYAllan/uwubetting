@@ -1,5 +1,6 @@
 """Point d'entrée du bot de pronos. Charge le .env, sync les commandes, lance
 le scheduler. Logs vers pronobot.log (rotation) + stdout (journalctl/Coolify)."""
+import asyncio
 import os
 import sys
 import logging
@@ -13,6 +14,7 @@ load_dotenv()
 
 import db          # noqa: E402  (après load_dotenv)
 import scheduler   # noqa: E402
+import battement   # noqa: E402
 from commands import setup_commands  # noqa: E402
 
 log = logging.getLogger("pronobot")
@@ -68,6 +70,11 @@ class Bot(discord.Client):
         await self.tree.sync(guild=GUILD)
         scheduler.start(self)              # mémorise le client + planifie les jobs
         log.info("commandes synchronisées sur la guild %s", GUILD.id)
+        # Gardée dans un attribut : une tâche sans référence peut être ramassée en route.
+        self._battement = asyncio.create_task(battement.boucle(
+            os.environ.get("DASHBOARD_BATTEMENT_URL", ""),
+            os.environ.get("DASHBOARD_BATTEMENT_JETON", ""),
+        ))
 
     async def on_ready(self):
         # 1er remplissage ici (pas dans setup_hook) : le cache des salons est

@@ -18,7 +18,7 @@ scheduler.py      # jobs APScheduler : refresh (00h00) + résolution (1h) + suiv
 ui.py             # embeds + pagination à boutons + modal "prono rapide"
 commands/         # slash commands
   matchs · prono · mes_pronos · classement · sports · aide
-requirements.txt · .env.example · Dockerfile · docker-compose.yml · pronobot.service
+requirements.txt · .env.example · Dockerfile · docker-compose.yml
 ```
 
 ## Commandes
@@ -102,7 +102,7 @@ Le bot est un *worker* (aucun port web). Déploiement via `docker-compose.yml`.
    `restart: unless-stopped` le relance s'il plante.
 
 > Worker sans port : pas de health check. Si Coolify en réclame un, désactive-le
-> pour ce service. `pronobot.service` (systemd) reste fourni si tu veux du nu un jour.
+> pour ce service.
 
 ## Changer de sport/ligue
 Modifie `LEAGUE_ID` dans `.env` (NBA = `basketball/nba`) ou passe par
