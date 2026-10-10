@@ -41,7 +41,7 @@ jobs:
       - name: Le bot charge ses modules et passe ses auto-tests dans l'image
         # compileall ne chargeait aucun module : un paquet cassé (requirements en >=)
         # laissait la CI verte. bot.py reste dehors : il lit DISCORD_TOKEN dès son chargement.
-        run: docker run --rm uwubetting:essai sh -c 'python scoring.py && python db.py && python -c "import scheduler, commands"'
+        run: docker run --rm uwubetting:essai sh -c 'python scoring.py && python db.py && python battement.py && python -c "import scheduler, commands"'
       - if: env.PUBLIER == 'true'
         uses: docker/login-action@v4
         with:
