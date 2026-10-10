@@ -29,6 +29,7 @@ jobs:
           diff <(echo "$attendu") <(jq -r '.services.pronobot.environment | keys[]' <<< "$config" | sort)
           jq -e '.services.pronobot.image == "ghcr.io/slyallan/uwubetting:master"' <<< "$config"
           jq -e '.volumes["uwubetting-data"].external == true' <<< "$config"
+          jq -e '.services.pronobot.networks | has("dokploy-network")' <<< "$config"
       - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v7
         with:
